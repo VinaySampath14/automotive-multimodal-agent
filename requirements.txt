@@ -1,0 +1,12 @@
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+pipecat-ai>=0.0.50
+transformers>=4.44.0
+torch>=2.3.0
+pillow>=10.3.0
+python-dotenv>=1.0.1
+pytest>=8.0.0
+
+# Optional: use LiveKit Agents instead of Pipecat for voice I/O
+# livekit-agents>=0.10.0
