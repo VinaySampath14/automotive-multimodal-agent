@@ -33,7 +33,7 @@
     "intent": "vision",
     "safety_allowed": true,
     "needs_confirmation": false,
-    "response": "The back seat appears empty in this frame."
+    "response": "I can't determine if the back seat is empty from this image. The interior visibility is limited."
   },
   {
     "id": "vision-02",
@@ -45,7 +45,7 @@
     "intent": "vision",
     "safety_allowed": true,
     "needs_confirmation": false,
-    "response": "It looks clear outside, no rain visible in the image."
+    "response": "The weather appears to be clear and dry. The image shows a car traveling on a road without any visible rain, snow, or puddles, and the skies seem fairly bright, indicating no immediate storm or cloudy weather."
   },
   {
     "id": "ambig-01",

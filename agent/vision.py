@@ -9,9 +9,12 @@ Flip `mock_mode=False` and provide a real image once you're ready.
 
 from __future__ import annotations
 
+import base64
 import os
 from dataclasses import dataclass
 from typing import Optional
+
+from openai import OpenAI
 
 
 @dataclass
@@ -55,13 +58,28 @@ class VisionAssistant:
         if self.mock_mode:
             return self._mock_answer(image_path, question)
 
-        self._lazy_load()
-        # TODO: real inference call goes here, e.g.:
-        # inputs = self._processor(images=image, text=question, return_tensors="pt")
-        # output = self._model.generate(**inputs, max_new_tokens=128)
-        # text = self._processor.decode(output[0], skip_special_tokens=True)
-        # return VisionAnswer(answer=text, model_used=self.model_name, mock=False)
-        raise NotImplementedError("Wire up real inference before disabling mock_mode.")
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+
+        ext = os.path.splitext(image_path)[-1].lower().lstrip(".")
+        mime = f"image/{ext if ext in ('png', 'jpg', 'jpeg', 'webp') else 'jpeg'}"
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_data}"}},
+                        {"type": "text", "text": question},
+                    ],
+                }
+            ],
+            max_tokens=256,
+        )
+        text = response.choices[0].message.content.strip()
+        return VisionAnswer(answer=text, model_used="gpt-4o", mock=False)
 
     def _mock_answer(self, image_path: str, question: str) -> VisionAnswer:
         """

@@ -19,7 +19,7 @@ from langchain_core.tools import tool
 from agent.vision import VisionAssistant
 from dashboard import dashboard_bridge
 
-_vision_assistant = VisionAssistant(mock_mode=True)  # flip to False once real VLM is wired
+_vision_assistant = VisionAssistant(mock_mode=False)
 
 
 # ---------------------------------------------------------------------------
