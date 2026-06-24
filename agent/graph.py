@@ -12,11 +12,18 @@ ready — the graph shape doesn't need to change.
 
 from __future__ import annotations
 
+import os
 from typing import Literal, TypedDict
 
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from agent.tools import query_cabin_image, safety_check, set_climate, set_navigation
+
+load_dotenv()
+
+_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=os.getenv("OPENAI_API_KEY"))
 
 Intent = Literal["climate", "navigation", "vision", "chat"]
 
@@ -37,39 +44,22 @@ class AgentState(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 def classify_intent_stub(text: str) -> Intent:
-    """
-    Rule-based stand-in for an LLM intent classifier.
-
-    Uses whole-word token matching for single-word keywords (so "back seat"
-    does NOT match "ac" — a real bug found while building this scaffold:
-    naive substring matching on "ac" matched inside "back"). Multi-word
-    phrases still use substring matching since false positives there are
-    much rarer.
-
-    TODO: replace with a real call, e.g.:
-        response = llm.invoke(f"Classify this in-car command into "
-                               f"climate/navigation/vision/chat: {text}")
-        return parse_intent(response)
-    """
-    t = text.lower()
-    tokens = set(t.replace("?", "").replace(",", "").split())
-
-    climate_words = {"ac", "climate", "heat", "cool", "temperature"}
-    climate_phrases = ["air condition"]
-
-    nav_words = {"navigate"}
-    nav_phrases = ["directions", "drive to", "route to", "take me to"]
-
-    vision_words = {"weather", "raining", "see"}
-    vision_phrases = ["what's outside", "what is outside", "back seat", "building"]
-
-    if tokens & climate_words or any(p in t for p in climate_phrases):
-        return "climate"
-    if tokens & nav_words or any(p in t for p in nav_phrases):
-        return "navigation"
-    if tokens & vision_words or any(p in t for p in vision_phrases):
-        return "vision"
-    return "chat"
+    """Classifies user intent using GPT-4o-mini."""
+    prompt = (
+        "You are an in-car voice assistant. Classify the user command into exactly "
+        "one of these intents: climate, navigation, vision, chat.\n\n"
+        "- climate: AC, heat, temperature, fan\n"
+        "- navigation: directions, route, destination\n"
+        "- vision: questions about what the camera sees (cabin, outside, weather)\n"
+        "- chat: anything else\n\n"
+        f"Command: {text}\n"
+        "Reply with one word only."
+    )
+    response = _llm.invoke(prompt)
+    intent = response.content.strip().lower()
+    if intent not in ("climate", "navigation", "vision", "chat"):
+        return "chat"
+    return intent  # type: ignore[return-value]
 
 
 def classify_intent_node(state: AgentState) -> AgentState:
