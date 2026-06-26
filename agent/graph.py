@@ -95,15 +95,20 @@ def route_after_safety(state: AgentState) -> str:
 def climate_node(state: AgentState) -> AgentState:
     text = state["user_text"].lower()
     action = "on" if "on" in text else "off" if "off" in text else "set_temperature"
-    result = set_climate.invoke({"zone": "front", "action": action, "value": ""})
-    return {**state, "tool_result": result}
+    set_climate.invoke({"zone": "front", "action": action, "value": ""})
+    if action == "on":
+        msg = "Air conditioning is now on."
+    elif action == "off":
+        msg = "Air conditioning is now off."
+    else:
+        msg = "Temperature updated."
+    return {**state, "tool_result": msg}
 
 
 def navigation_node(state: AgentState) -> AgentState:
-    # naive destination extraction for the scaffold — replace with NER/LLM parsing
     destination = state["user_text"].split("to", 1)[-1].strip() or "unknown destination"
-    result = set_navigation.invoke({"destination": destination})
-    return {**state, "tool_result": result}
+    set_navigation.invoke({"destination": destination})
+    return {**state, "tool_result": f"Navigating to {destination}."}
 
 
 def vision_node(state: AgentState) -> AgentState:
@@ -112,11 +117,11 @@ def vision_node(state: AgentState) -> AgentState:
 
 
 def chat_node(state: AgentState) -> AgentState:
-    return {**state, "tool_result": "I'm here — let me know if you need climate, navigation, or to ask about what's around you."}
+    return {**state, "tool_result": "I'm here. Let me know if you need climate control, navigation, or want to know what's around you."}
 
 
 def refuse_node(state: AgentState) -> AgentState:
-    return {**state, "tool_result": f"Sorry, I can't do that right now: {state['safety_reason']}"}
+    return {**state, "tool_result": f"Sorry, I can't do that while driving."}
 
 
 def respond_node(state: AgentState) -> AgentState:

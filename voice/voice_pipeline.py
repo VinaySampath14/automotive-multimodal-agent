@@ -15,7 +15,7 @@ import sys
 import pyaudio
 from dotenv import load_dotenv
 from loguru import logger
-from pipecat.frames.frames import EndFrame, TextFrame, TranscriptionFrame
+from pipecat.frames.frames import EndFrame, TextFrame, TranscriptionFrame, TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.worker import PipelineWorker
@@ -58,10 +58,13 @@ class AgentProcessor(FrameProcessor):
             if not text:
                 return
             logger.info(f"[STT] {text}")
-            result = run_agent(user_text=text, is_driving=self.is_driving)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, lambda: run_agent(user_text=text, is_driving=self.is_driving)
+            )
             response = result.get("response", "Sorry, I didn't catch that.")
             logger.info(f"[Agent] {response}")
-            await self.push_frame(TextFrame(text=response))
+            await self.push_frame(TTSSpeakFrame(text=response))
         else:
             await self.push_frame(frame, direction)
 
