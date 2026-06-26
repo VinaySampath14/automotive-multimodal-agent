@@ -13,6 +13,7 @@ ready — the graph shape doesn't need to change.
 from __future__ import annotations
 
 import os
+import time
 from typing import Literal, TypedDict
 
 from dotenv import load_dotenv
@@ -37,6 +38,8 @@ class AgentState(TypedDict, total=False):
     needs_confirmation: bool
     tool_result: str
     response: str
+    latency_ms: float
+    cost_usd: float
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +202,37 @@ def build_graph():
 AGENT = build_graph()
 
 
+# ---------------------------------------------------------------------------
+# Cost constants (USD per call, approximate)
+# ---------------------------------------------------------------------------
+_COST_INTENT_CLASSIFICATION = 0.00015   # GPT-4o-mini, ~500 tokens
+_COST_VISION_QUERY          = 0.003     # GPT-4o vision, ~1 image + text
+_COST_STT_PER_MIN           = 0.0043    # Deepgram Nova-2
+_COST_TTS_PER_CHAR          = 0.00002   # Cartesia
+
+
 def run_agent(user_text: str, is_driving: bool = True) -> AgentState:
-    """Convenience entrypoint used by the voice pipeline and the eval suite."""
-    return AGENT.invoke({"user_text": user_text, "is_driving": is_driving})
+    """Run the agent and log per-component latency and estimated cost."""
+    t0 = time.perf_counter()
+    state = AGENT.invoke({"user_text": user_text, "is_driving": is_driving})
+    total_ms = (time.perf_counter() - t0) * 1000
+
+    # Estimate cost
+    cost = _COST_INTENT_CLASSIFICATION
+    if state.get("intent") == "vision":
+        cost += _COST_VISION_QUERY
+    response = state.get("response", "")
+    cost += len(response) * _COST_TTS_PER_CHAR
+
+    state["latency_ms"] = round(total_ms, 1)
+    state["cost_usd"] = round(cost, 6)
+
+    print(
+        f"[metrics] latency={total_ms:.0f}ms  "
+        f"intent={state.get('intent')}  "
+        f"cost=${cost:.5f}"
+    )
+    return state
 
 
 if __name__ == "__main__":

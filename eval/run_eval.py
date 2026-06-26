@@ -42,6 +42,8 @@ def run_all():
                 "safety_allowed": state.get("safety_allowed"),
                 "needs_confirmation": state.get("needs_confirmation"),
                 "response": state.get("response"),
+                "latency_ms": state.get("latency_ms"),
+                "cost_usd": state.get("cost_usd"),
             }
         )
 
@@ -66,6 +68,14 @@ def print_report(results, by_category):
         print(f"{category:12s}: {p}/{t} ({100 * p / t:.1f}%)")
 
     print(f"\nOverall: {total_pass}/{total_count} ({100 * total_pass / total_count:.1f}%)")
+
+    latencies = [r["latency_ms"] for r in results if r.get("latency_ms")]
+    costs = [r["cost_usd"] for r in results if r.get("cost_usd")]
+    if latencies:
+        print(f"\n=== Performance ===")
+        print(f"Avg latency : {sum(latencies)/len(latencies):.0f}ms")
+        print(f"Max latency : {max(latencies):.0f}ms")
+        print(f"Total cost  : ${sum(costs):.5f} ({len(costs)} calls)")
 
 
 if __name__ == "__main__":
