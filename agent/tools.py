@@ -36,6 +36,7 @@ UNSAFE_WHILE_DRIVING: list[set[str]] = [
     {"play", "video"},
     {"show", "video"},
     {"watch", "movie"},
+    {"show", "movie"},
     {"camera", "feed", "entertainment"},
 ]
 
