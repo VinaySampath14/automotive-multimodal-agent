@@ -58,10 +58,7 @@ class AgentProcessor(FrameProcessor):
             if not text:
                 return
             logger.info(f"[STT] {text}")
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, lambda: run_agent(user_text=text, is_driving=self.is_driving)
-            )
+            result = run_agent(user_text=text, is_driving=self.is_driving)
             response = result.get("response", "Sorry, I didn't catch that.")
             logger.info(f"[Agent] {response}")
             await self.push_frame(TTSSpeakFrame(text=response))
@@ -110,7 +107,7 @@ async def handle_transcript(text: str, is_driving: bool = True) -> str:
 
 
 async def main():
-    pipeline, pa = build_pipeline(is_driving=False)
+    pipeline, pa = build_pipeline(is_driving=True)
     worker = PipelineWorker(pipeline, idle_timeout_secs=None)
     runner = PipelineRunner()
     logger.info("Voice pipeline running — Ctrl+C to stop.")

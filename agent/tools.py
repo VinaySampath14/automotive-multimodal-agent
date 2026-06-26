@@ -61,7 +61,7 @@ def safety_check(user_text: str, is_driving: bool = True) -> dict:
     false-allow / false-refuse rates — that comparison is a much stronger
     "error analysis" story than either approach alone.
     """
-    tokens = set(user_text.lower().replace(",", "").split())
+    tokens = set(user_text.lower().translate(str.maketrans("", "", ".,!?")).split())
 
     if is_driving:
         for rule in UNSAFE_WHILE_DRIVING:

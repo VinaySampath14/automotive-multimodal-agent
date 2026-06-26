@@ -92,16 +92,42 @@ def route_after_safety(state: AgentState) -> str:
 # swap for real LLM-driven tool-calling once an LLM is wired in)
 # ---------------------------------------------------------------------------
 
+_WORD_TO_NUM = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+    "twenty": 20, "twenty one": 21, "twenty two": 22, "twenty three": 23,
+    "twenty four": 24, "twenty five": 25, "twenty six": 26, "twenty seven": 27,
+    "twenty eight": 28, "twenty nine": 29, "thirty": 30,
+}
+
+def _extract_temperature(text: str):
+    import re
+    # Try digit first
+    m = re.search(r"\b(\d{1,2})\b", text)
+    if m:
+        return m.group(1)
+    # Try word numbers (longest match first)
+    for phrase in sorted(_WORD_TO_NUM, key=len, reverse=True):
+        if phrase in text:
+            return str(_WORD_TO_NUM[phrase])
+    return None
+
+
 def climate_node(state: AgentState) -> AgentState:
     text = state["user_text"].lower()
-    action = "on" if "on" in text else "off" if "off" in text else "set_temperature"
-    set_climate.invoke({"zone": "front", "action": action, "value": ""})
-    if action == "on":
-        msg = "Air conditioning is now on."
-    elif action == "off":
+    temp_value = _extract_temperature(text)
+    if temp_value:
+        action = "set_temperature"
+        msg = f"Temperature set to {temp_value} degrees."
+    elif "off" in text:
+        action, temp_value = "off", ""
         msg = "Air conditioning is now off."
     else:
-        msg = "Temperature updated."
+        action, temp_value = "on", ""
+        msg = "Air conditioning is now on."
+    set_climate.invoke({"zone": "front", "action": action, "value": temp_value or ""})
     return {**state, "tool_result": msg}
 
 
