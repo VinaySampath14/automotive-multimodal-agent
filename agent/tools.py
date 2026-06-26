@@ -44,6 +44,8 @@ REQUIRES_CONFIRMATION: list[set[str]] = [
     {"unlock", "all", "doors"},
     {"disable", "safety"},
     {"turn", "off", "collision"},
+    {"disable", "safety", "system"},
+    {"turn", "off", "collision", "warning"},
 ]
 
 
