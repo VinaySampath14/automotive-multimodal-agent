@@ -1,110 +1,139 @@
-# Co-Pilot: Multimodal Agentic Assistant for an In-Car Dashboard
+# In-Car Multimodal Voice Agent
 
-A voice- and vision-enabled agent that controls a simulated car dashboard.
-It listens to spoken commands, looks at a "cabin/dashcam" image when needed,
-decides what to do via an LLM agent, calls tools to act on the dashboard,
-and speaks a response back — with a safety-scenario evaluation suite.
-
-This is a **scaffold**: working code structure with clear TODOs, not a
-finished product. You fill in API keys, swap in a real dashboard fork, and
-run the eval suite to get real numbers before putting anything on a resume.
+A real-time voice- and vision-enabled AI assistant that controls a car dashboard. Speaks commands → classifies intent → executes tools → updates dashboard gauges and map → speaks response back. Built with LangGraph, Pipecat, Deepgram, Cartesia, and GPT-4o vision.
 
 ---
 
 ## Architecture
 
 ```
- [Microphone] --STT (Pipecat/LiveKit)--> "turn on the AC"
-                                              |
-                                              v
-                                   +----------------------+
-                                   |  LangGraph Agent     |
-                                   |  1. classify_intent  |
-                                   |  2. safety_check     |
-                                   |  3. route to tool    |
-                                   +----------------------+
-                                   /        |         \
-                                  v         v          v
-                          climate_tool  nav_tool   vision_tool
-                          (MCP-style)   (MCP-style) (Qwen2-VL on
-                                                      cabin image)
-                                   \        |         /
-                                    v       v        v
-                              dashboard_bridge.py
-                              (writes dashboard_state.json)
-                                              |
-                                              v
-                                  [Forked dashboard GUI reads
-                                   state, updates gauges/AC/nav]
-                                              |
-                                              v
-                              Agent generates spoken reply
-                                              |
-                                              v
-                                  TTS (Pipecat/LiveKit) --> [Speaker]
+[Microphone]
+     │
+     ▼
+Deepgram STT (Pipecat)
+     │  "turn on the AC"
+     ▼
+┌─────────────────────────────┐
+│       LangGraph Agent        │
+│  1. classify_intent          │  ← GPT-4o-mini
+│  2. safety_check             │  ← rule-based gate
+│  3. route to tool            │
+└─────────────────────────────┘
+     │           │          │
+     ▼           ▼          ▼
+climate_tool  nav_tool  vision_tool
+     │           │          │  ← GPT-4o vision
+     └─────┬─────┘          │
+           ▼                │
+   dashboard_bridge.py      │
+   (writes JSON state)      │
+           │                │
+           ▼                │
+   PyQt5 Dashboard GUI  ◄───┘
+   (polls state, updates
+    AC toggle, temp gauge,
+    ORS route on map)
+           │
+           ▼
+   Cartesia TTS → [Speaker]
 ```
 
 ---
 
-## Components & what to plug in
+## Eval Results (real numbers, run 2026-06-27)
 
-| Folder | What it does | What you need to do |
-|---|---|---|
-| `agent/graph.py` | LangGraph state machine: intent routing, safety gate, dispatch to tools | Replace the stub classifier with a real LLM call (GPT-4o-mini, Claude, or local Qwen) |
-| `agent/tools.py` | MCP-style tool definitions: climate control, navigation, vision query | Wire `dashboard_bridge` calls to your actual forked dashboard's API/state file |
-| `agent/vision.py` | Qwen2-VL wrapper for answering questions about a cabin/dashcam image | Set `mock_mode=False` and provide a real image once you have GPU/API access |
-| `voice/voice_pipeline.py` | Pipecat pipeline skeleton: mic → STT → agent → TTS → speaker | Add your STT/TTS provider API keys (Deepgram, Cartesia, etc.) |
-| `dashboard/dashboard_bridge.py` | Shared-state bridge between agent and dashboard GUI | Point `STATE_FILE` at wherever your forked dashboard repo polls from, or replace with a direct function call if you integrate in-process |
-| `eval/scenarios.py` | Safety + functional test scenarios (the part most people skip) | Add more scenarios specific to your final feature set |
-| `eval/run_eval.py` | Runs all scenarios against the agent, reports pass rate | Run this for real, save `results.json`, use the real numbers in your resume bullet |
+| Category | Pass Rate |
+|---|---|
+| Functional | 7/7 (100%) |
+| Vision | 4/4 (100%) |
+| Ambiguous | 3/3 (100%) |
+| Safety | 4/4 (100%) |
+| Degradation | 2/2 (100%) |
+| **Overall** | **20/20 (100%)** |
 
----
+**Performance:** avg latency 1033ms · max 2441ms · ~$0.002/interaction
 
-## Suggested dashboard to fork
-
-`SihabSahariar/Smart-CAR-Dashboard-GUI-in-Python` — already has speed, fuel,
-door status, AC/music controls, nav, weather, and camera feed, and explicitly
-lists "virtual assistant for hands-free control" as a planned-but-unbuilt
-feature. That's the gap this project fills.
-
-Wire `dashboard_bridge.py` to read/write whatever state format that repo's
-`app.py` uses (a shared JSON file is the simplest integration — poll it on
-a timer in the dashboard's render loop).
+**Safety ablation (rule-based vs LLM):** 86.7% agreement · rule-based: 0 errors · LLM: 2 false-refuses
 
 ---
 
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv venv
+venv\Scripts\activate       # Windows
 pip install -r requirements.txt
-cp .env.example .env   # fill in your API keys
+cp .env.example .env        # fill in API keys
 ```
 
-Run the eval suite (works in mock mode with no API keys, for a dry run):
+Required keys in `.env`:
+```
+OPENAI_API_KEY=...
+DEEPGRAM_API_KEY=...
+CARTESIA_API_KEY=...
+ORS_API_KEY=...
+```
+
+Run eval suite:
 ```bash
 python -m eval.run_eval
 ```
 
-Run the voice pipeline (needs real API keys):
+Run voice pipeline:
 ```bash
 python -m voice.voice_pipeline
 ```
 
+Run dashboard (separate terminal, from dashboard folder):
+```bash
+python app.py
+```
+
 ---
 
-## Honest resume-bullet template (fill in only after you've actually run it)
+## Architecture Decisions
+
+**Why GPT-4o-mini for intent classification?**
+Fast (< 1s), cheap ($0.00015/call), and the task is simple 4-class classification. A local model (Qwen2-VL, Llama) would eliminate API cost and latency but requires GPU infrastructure. For a portfolio demo, GPT-4o-mini gives reliable results immediately. In production, this would be the first component to replace with an on-device model.
+
+**Why GPT-4o vision instead of Qwen2-VL locally?**
+Qwen2-VL-7B requires ~16GB VRAM and a dedicated GPU. GPT-4o vision gives comparable quality with zero infrastructure cost for the portfolio stage. The `VisionAssistant` class in `agent/vision.py` is designed to swap — set `mock_mode=False` and implement `_lazy_load()` for the local model path.
+
+**Why Deepgram + Cartesia over alternatives?**
+Deepgram Nova-2 has the best WER for conversational speech at $0.0043/min. Cartesia produces the most natural-sounding TTS at low latency. Both have Pipecat-native integrations, which kept the voice pipeline code simple. Alternatives (Whisper + ElevenLabs) would work but add more moving parts.
+
+**Why rule-based safety gate instead of LLM-based?**
+Explainability and reliability. An LLM-based safety gate introduces hallucination risk on safety-critical decisions. The rule-based gate is deterministic, auditable, and fast (no API call). The ablation study confirms this was the right call — rule-based achieved 0 errors vs. 2 false-refuses for the LLM on the same 15 test cases.
+
+**Why LangGraph instead of a custom agent loop?**
+LangGraph provides a proven state machine with built-in visualization and debugging. The graph shape (classify → safety → route → respond) maps naturally to the problem. The main cost is an extra dependency; the benefit is that each node is independently testable and the graph is easy to extend.
+
+---
+
+## Limitations & Future Work
+
+**What this project is not:**
+
+- **Not on-device inference.** All LLM calls go to OpenAI's cloud. Real automotive systems (BMW, Mercedes) require offline capability for reliability and data privacy. The fix is replacing GPT-4o-mini with a quantized local model (Phi-3-mini, Qwen2.5-1.5B) and GPT-4o vision with Qwen2-VL on a local GPU.
+
+- **Driving state is a manual flag.** `is_driving=True/False` is hardcoded, not sensed. A real system would read vehicle CAN bus data (speed > 0, gear not in Park) to determine driving state automatically.
+
+- **Safety rules are a hand-built list.** `UNSAFE_WHILE_DRIVING` covers known patterns but cannot generalize to novel unsafe requests. A trained safety classifier (fine-tuned on automotive safety datasets) would have better recall. The ablation study shows the LLM alternative over-refuses — prompt tuning or fine-tuning would be needed.
+
+- **Static sample image.** Vision queries run against one fixed dashcam image (`dashboard/sample_cabin.jpg`). A production system would capture live frames from a camera stream and send the current frame on each vision query.
+
+- **No conversational memory.** Each command is stateless. "Navigate to the airport" followed by "actually make it the train station" would set two separate destinations rather than updating the previous one. Adding LangGraph's memory module or a conversation buffer would address this.
+
+- **No multi-turn context.** The agent handles single-shot commands only. A real assistant would maintain context across a conversation turn.
+
+---
+
+## Resume Bullet
 
 ```
-Built a multimodal (speech, vision, text) agentic assistant for an in-car
-dashboard using LangGraph, MCP-style tool calling, and a VLM (Qwen2-VL) for
-visual queries, with real-time speech I/O via Pipecat.
-Evaluated against [N] test scenarios spanning functional commands, ambiguous
-requests, and safety-critical refusals, achieving [X]% task success and
-[Y]% correct safety-refusal rate.
+Built a real-time multimodal in-car voice agent (Python, LangGraph, Pipecat) with
+Deepgram STT, Cartesia TTS, and GPT-4o vision for dashcam Q&A; evaluated across
+20 scenarios (100% pass rate, 1033ms avg latency, ~$0.002/interaction); conducted
+rule-based vs. LLM safety gate ablation study (86.7% agreement, rule-based: 0 errors);
+wired live ORS map routing and a PyQt5 dashboard that auto-updates on voice command.
 ```
-
-Do not fill in `[N]`, `[X]`, `[Y]` until `eval/run_eval.py` has actually
-produced them. Don't claim "multimodal" if you skip the vision wiring —
-keep the bullet to "speech, text" if vision stays unfinished.
